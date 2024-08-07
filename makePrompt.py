@@ -114,7 +114,7 @@ def concat_files(filenames, output_base, max_tokens=None, keep_comments=False):
 
                 if max_tokens and current_tokens > max_tokens:
                     output_path = f"{output_base}_part{current_part}"
-                    with open(output_path, 'w') as output_file:
+                    with open(output_path, 'w', encoding='utf-8') as output_file:
                         output_file.write(concatenated_content)
 
                     print(f"{output_path} contains {current_tokens} tokens.")
@@ -126,7 +126,7 @@ def concat_files(filenames, output_base, max_tokens=None, keep_comments=False):
             print(f"Error processing file {filename}: {e}")
 
     output_filename = f"{output_base}" if current_part == 1 else f"{output_base}_part{current_part}"
-    with open(output_filename, 'w') as output_file:
+    with open(output_filename, 'w', encoding='utf-8') as output_file:
         output_file.write(concatenated_content)
 
     print(f"{output_filename} contains {current_tokens} tokens.")
@@ -146,7 +146,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     source_files = []
-    with open(args.input_file, 'r') as f:
+    with open(args.input_file, 'r', encoding='utf-8') as f:
         paths = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
     for path in paths:
