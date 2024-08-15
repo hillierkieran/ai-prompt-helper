@@ -4,7 +4,7 @@ import argparse
 import tiktoken
 
 # Constants
-CODE_FILES = ['.php', '.json', '.env', '.blade.php', '.js', '.css']
+CODE_FILES = ['.php', '.json', '.env', '.blade.php', '.js', '.css', '.md']
 
 # Utility Functions
 def gather_files(directory_path):
@@ -76,6 +76,8 @@ def concat_files(filenames, output_base, max_tokens=None, keep_comments=False):
     current_part = 1
     current_tokens = 0
 
+    print("Tokens | File")
+
     for filename in filenames:
         code_file = filename.endswith(tuple(CODE_FILES))
         try:
@@ -104,6 +106,12 @@ def concat_files(filenames, output_base, max_tokens=None, keep_comments=False):
 
                 content = clean_content(content)
 
+                # Count tokens for the current file
+                file_tokens = count_tokens(content, encoding)
+                # Calculate the number of spaces needed to align the output
+                space_padding = 6 - len(str(file_tokens))
+                print(f"{file_tokens}{' ' * space_padding} | {filename}")  # Print token count for each file
+
                 current_tokens += count_tokens(content, encoding)
                 separator = "\n\n\n" if concatenated_content else ""
                 displayed_filename = filename if args.show_full_path else os.path.basename(filename)
@@ -129,7 +137,8 @@ def concat_files(filenames, output_base, max_tokens=None, keep_comments=False):
     with open(output_filename, 'w', encoding='utf-8') as output_file:
         output_file.write(concatenated_content)
 
-    print(f"{output_filename} contains {current_tokens} tokens.")
+    print("--- Processing complete ---")
+    print(f"Output file `{output_filename}` contains {current_tokens:,} tokens.")
     return output_filename  # Return the final path for printing purposes.
 
 # Main Script Execution
