@@ -1,48 +1,79 @@
+import os
 import sys
+import argparse
 try:
-    import tiktoken # type: ignore
+    import tiktoken  # type: ignore
 except ImportError:
     print("Error: Failed to import 'tiktoken'. Please make sure it is installed.")
     sys.exit(1)
 
+# Hardcoded token limits for each model
+MODEL_LIMITS = {
+    'gpt-4': 8192,
+    'gpt-4o': 8192,
+    'gpt-4o-mini': 8192,
+}
+
+def gather_files(directory_path):
+    """Gather all files recursively from the given directory."""
+    all_files = []
+    for root, _, filenames in os.walk(directory_path):
+        for filename in filenames:
+            all_files.append(os.path.join(root, filename))
+    return all_files
 
 def count_tokens_from_file(file_path, encoding):
-    with open(file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-    tokens = encoding.encode(content)
-    return len(tokens)
-
+    """Count the number of tokens in the provided file using specified encoding."""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        tokens = encoding.encode(content)
+        return len(tokens)
+    except Exception as e:
+        print(f"Error processing file {file_path}: {e}")
+        return None
 
 def main():
-    # Check if file path is provided
-    if len(sys.argv) < 2:
-        print("Usage: python countTokens.py <input_file> [model]")
-        print("Model options: gpt-3.5, gpt-4, gpt-4o, gpt-4o-mini")
-        print("Default model is 'gpt-4'.")
-        return
+    parser = argparse.ArgumentParser(description='Token Counter for Files or Directories')
+    parser.add_argument('path', type=str, help='Path to file or directory to count tokens')
+    parser.add_argument('--model', default='gpt-4', choices=MODEL_LIMITS.keys(), help='Model to use for token counting')
 
-    file_path = sys.argv[1]
-    model = sys.argv[2] if len(sys.argv) > 2 else 'gpt-4'
+    args = parser.parse_args()
 
-    # Set encoding and context length based on model
-    if model == 'gpt-3.5':
-        encoding = tiktoken.encoding_for_model('gpt-3.5-turbo')
-        context_length = 16000
-    elif model in ['gpt-4', 'gpt-4o', 'gpt-4o-mini']:
-        encoding = tiktoken.encoding_for_model('gpt-4')
-        context_length = 128000
+    # Set encoding based on model
+    encoding = tiktoken.encoding_for_model(args.model)
+
+    if os.path.isdir(args.path):
+        # If it's a directory, gather all files and count tokens for each
+        files = gather_files(args.path)
     else:
-        print("Unsupported model.")
-        return
+        # If it's a single file, just use that file
+        files = [args.path]
 
-    # Get the token count
-    token_count = count_tokens_from_file(file_path, encoding)
 
-    # Check if the token count fits within the context window
-    if token_count > context_length:
-        print(f"TOO BIG: '{file_path}' contains {token_count} tokens, exceeding {model}'s {context_length} token context window.")
-    else:
-        print(f"SUCCESS: '{file_path}' contains {token_count} tokens, fitting within {model}'s {context_length} token context window.")
+    # Print header
+    print("TOKENS | FILENAME")
+
+    total_tokens = 0
+    # Iterate through files and count tokens
+    for file_path in files:
+        token_count = count_tokens_from_file(file_path, encoding)
+        if token_count is not None:
+            total_tokens += token_count
+            space_padding = 6 - len(str(token_count))
+            print(f"{' ' * space_padding}{token_count} | {file_path}")
+
+
+    print("_______|____________________")
+
+    # Print total token count
+    space_padding = 6 - len(str(total_tokens))
+    print(f"{' ' * space_padding}{total_tokens} | Total Tokens")
+
+    # Print the model's max input size
+    max_length = MODEL_LIMITS[args.model]
+    space_padding = 6 - len(str(max_length))
+    print(f"{' ' * space_padding}{max_length} | {args.model} max input size")
 
 if __name__ == "__main__":
     main()
