@@ -1,2 +1,4 @@
 *.txt
 input/
+.history/
+*.diff
