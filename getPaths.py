@@ -10,7 +10,11 @@ def load_gitignore(directory):
     return None
 
 def list_all_files_in_directory(directory, file_types=None, gitignore_spec=None):
-    for root, _, files in os.walk(directory):
+    for root, dirs, files in os.walk(directory):
+        # Ignore the .git directory
+        if '.git' in dirs:
+            dirs.remove('.git')
+
         for file in files:
             # Get relative file path and normalize to forward slashes
             file_path = os.path.relpath(os.path.join(root, file), directory).replace('\\', '/')
