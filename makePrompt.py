@@ -101,7 +101,7 @@ def clean_content(content):
     trimmed_lines = [line.rstrip() for line in lines if line.strip()]
     return "\n".join(trimmed_lines)
 
-def concat_files(filenames, output_base, max_tokens, keep_comments, line_numbers, show_full_path, encoding):
+def concat_files(filenames, output_base, max_tokens, keep_comments, line_numbers, show_full_path, show_path, encoding):
     """Concatenate content from given filenames and handle comments."""
     concatenated_content = ""
     current_part = 1
@@ -109,7 +109,7 @@ def concat_files(filenames, output_base, max_tokens, keep_comments, line_numbers
 
     print("TOKENS | FILENAME")
 
-    for filename in filenames:
+    for filename, original_filename in filenames:
         code_file = filename.endswith(tuple(CODE_FILES))
         try:
             with open(filename, 'r', encoding='utf-8') as file:
@@ -136,7 +136,7 @@ def concat_files(filenames, output_base, max_tokens, keep_comments, line_numbers
 
                 current_tokens += file_tokens
                 separator = "\n\n\n" if concatenated_content else ""
-                displayed_filename = filename if show_full_path else os.path.basename(filename)
+                displayed_filename = original_filename if show_path else filename if show_full_path else os.path.basename(filename)
                 concatenated_content += f"{separator}{displayed_filename}:\n"
                 concatenated_content += "```\n" if code_file else "\"\n"
                 concatenated_content += f"{content}\n"
@@ -166,6 +166,37 @@ def concat_files(filenames, output_base, max_tokens, keep_comments, line_numbers
         print(f"{' ' * space_padding}{current_tokens} | Output file `{output_filename}`")
         return output_filename
 
+def gather_files_from_input(input_path, debug):
+    """Gather files from input, taking into account the TARGET prefix."""
+    source_files = []
+    target_prefix = None
+
+    # If input is a directory, gather files directly
+    if os.path.isdir(input_path):
+        return [(f, f) for f in gather_files(input_path)], target_prefix
+
+    # If input is a file list, process the file
+    if os.path.isfile(input_path):
+        with open(input_path, 'r', encoding='utf-8') as f:
+            lines = [line.strip() for line in f if line.strip()]
+
+        # Check if the first line is a TARGET prefix
+        if lines[0].startswith("TARGET:"):
+            target_prefix = lines[0].replace("TARGET:", "").strip()
+            lines = lines[1:]  # Skip the TARGET line
+
+        for path in lines:
+            if not path.startswith("#"):  # Ignore commented-out lines
+                original_path = path  # Store original non-prefixed path
+                if target_prefix:
+                    path = os.path.join(target_prefix, path.lstrip("/"))
+                source_files.append((path, original_path))
+
+        if debug:
+            print(f"Debug: Target prefix is '{target_prefix}'")
+
+    return source_files, target_prefix
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process and concatenate files from given paths or directories.')
     parser.add_argument('input_path', type=str, help='Directory path or file containing list of paths to search for files.')
@@ -173,24 +204,15 @@ if __name__ == "__main__":
     parser.add_argument('--line-numbers', action='store_true', help='Prefix lines with their line numbers.')
     parser.add_argument('--keep-comments', action='store_true', help='Retain comments in files.')
     parser.add_argument('--show-full-path', action='store_true', help='Display the full path of files.')
+    parser.add_argument('--show-path', action='store_true', help='Display the non-prefixed path of files.')
     parser.add_argument('--max-tokens', required=False, type=int, help='Max tokens per output file part.')
     parser.add_argument('--concise', action='store_true', help='Remove non-crucial lines like imports and package names.')
     parser.add_argument('--debug', action='store_true')
 
     args = parser.parse_args()
 
-    # Determine if the input is a directory or a file list
-    if os.path.isdir(args.input_path):
-        source_files = gather_files(args.input_path)
-    elif os.path.isfile(args.input_path):
-        with open(args.input_path, 'r', encoding='utf-8') as f:
-            paths = [line.strip() for line in f if line.strip() and not line.startswith("#")]
-        source_files = []
-        for path in paths:
-            source_files.extend(gather_files(path) if os.path.isdir(path) else [path])
-    else:
-        print("The specified input path does not exist.")
-        sys.exit(1)
+    # Gather files and handle the TARGET prefix if present
+    source_files, target_prefix = gather_files_from_input(args.input_path, args.debug)
 
     try:
         encoding = tiktoken.encoding_for_model('gpt-4')
@@ -198,4 +220,4 @@ if __name__ == "__main__":
         encoding = None  # Consider providing a fallback or default handling if tiktoken fails
 
     output_base = args.output if args.output else os.path.splitext(args.input_path)[0]  # Use input_path's base if no output is provided
-    final_output = concat_files(source_files, output_base, args.max_tokens, args.keep_comments, args.line_numbers, args.show_full_path, encoding)
+    final_output = concat_files(source_files, output_base, args.max_tokens, args.keep_comments, args.line_numbers, args.show_full_path, args.show_path, encoding)

@@ -25,12 +25,23 @@ def list_all_files_in_directory(directory, file_types=None, gitignore_spec=None)
 
             # Check file types
             if file_types is None or any(file.endswith(file_type) for file_type in file_types):
-                yield os.path.join(root, file)
+                yield file_path
+
+def get_output_filename(directory, output=None):
+    if output is None:
+        # Create the paths directory if it doesn't exist
+        os.makedirs('./paths', exist_ok=True)
+
+        # Get the last part of the target directory and use it to name the output file
+        dir_name = os.path.basename(os.path.normpath(directory))
+        output = f"./paths/{dir_name}.txt"
+
+    return output
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("directory", type=str, help="The directory to search")
-    parser.add_argument("-o", "--output", type=str, default="paths.txt", help="The output file to write the paths to")
+    parser.add_argument("-o", "--output", type=str, help="The output file to write the paths to")
     parser.add_argument("-t", "--filetypes", nargs="+", help="List of file types to include")
 
     args = parser.parse_args()
@@ -38,8 +49,19 @@ if __name__ == "__main__":
     # Load .gitignore if present
     gitignore_spec = load_gitignore(args.directory)
 
-    with open(args.output, 'w') as f:
-        for file_path in list_all_files_in_directory(args.directory, args.filetypes, gitignore_spec):
-            f.write(file_path + '\n')
+    # Determine the output filename
+    output_file = get_output_filename(args.directory, args.output)
 
-    print(f"Paths written to {args.output}.")
+    # Get absolute path of the target directory
+    abs_directory = os.path.abspath(args.directory)
+
+    # Write the paths to the output file, prefixed with "#   "
+    with open(output_file, 'w') as f:
+        # Write the absolute path to the directory with 'TARGET:' prefix
+        f.write(f"TARGET: {abs_directory}\n\n")  # Absolute path followed by a blank line
+
+        # Write all file paths, stripped of the preceding relative path
+        for file_path in list_all_files_in_directory(args.directory, args.filetypes, gitignore_spec):
+            f.write(f"#   {file_path}\n")
+
+    print(f"Paths written to {output_file}.")
