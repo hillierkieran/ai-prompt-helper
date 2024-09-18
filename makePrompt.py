@@ -4,7 +4,7 @@ import argparse
 import tiktoken
 
 # Constants
-CODE_FILES = ['.php', '.json', '.env', '.blade.php', '.js', '.css', '.md']
+CODE_FILES = ['.php', '.json', '.env', '.blade.php', '.js', '.css', '.md', '.html']
 
 # Utility Functions
 def gather_files(directory_path):
@@ -72,9 +72,11 @@ def remove_comments(content, extension, keep_comments):
         print(f"Debug: Detected file extension as '{full_extension}' for file '{extension}'")
 
     comment_rules = {
+        # '.file_extension': ('single_line_comment', 'multi_line_comment_start', 'multi_line_comment_end')
         '.php': ('//', '/*', '*/'),
         '.js': ('//', '/*', '*/'),
-        '.css': ('/*', '*/'),
+        '.css': (None, '/*', '*/'),
+        '.html': (None, '<!--', '-->'),
         '.blade.php': ('{{--', '--}}', '<!--', '-->'),
         '.env': ('#', None, None),
     }
@@ -88,10 +90,11 @@ def remove_comments(content, extension, keep_comments):
         else:
             single, multi_start, multi_end = comment_rules[full_extension]
             # Remove multiline comments
-            if (multi_start and multi_end):
+            if multi_start and multi_end:
                 content = re.sub(re.escape(multi_start) + r'.*?' + re.escape(multi_end), '', content, flags=re.DOTALL)
-            # Remove single-line comments
-            content = re.sub(re.escape(single) + r'.*$', '', content, flags=re.MULTILINE)
+            # Remove single-line comments if defined
+            if single:
+                content = re.sub(re.escape(single) + r'.*$', '', content, flags=re.MULTILINE)
 
     return content
 
