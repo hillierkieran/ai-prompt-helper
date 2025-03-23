@@ -4,7 +4,7 @@ import argparse
 import tiktoken
 
 # Constants
-CODE_FILES = ['.php', '.json', '.env', '.blade.php', '.js', '.css', '.md', '.html']
+CODE_FILES = ['.php', '.json', '.env', '.blade.php', '.js', '.css', '.md', '.html', '.sql', 'cs']
 
 # Utility Functions
 def gather_files(directory_path):
@@ -40,6 +40,8 @@ def remove_non_crucial_lines(content, extension, concise):
         '.php': 'use ',
         '.js': 'import ',
         '.css': '@import ',
+        '.sql': 'USE ',
+        '.sql': 'using ',
     }
 
     if extension in import_startswith:
@@ -79,6 +81,8 @@ def remove_comments(content, extension, keep_comments):
         '.html': (None, '<!--', '-->'),
         '.blade.php': ('{{--', '--}}', '<!--', '-->'),
         '.env': ('#', None, None),
+        '.sql': ('--', '/*', '*/'),
+        '.cs': ('//', '/*', '*/'),
     }
 
     if full_extension in comment_rules:
@@ -104,6 +108,17 @@ def clean_content(content):
     trimmed_lines = [line.rstrip() for line in lines if line.strip()]
     return "\n".join(trimmed_lines)
 
+def read_file_with_fallback_encoding(file_path):
+    """Attempt to read a file with UTF-8, and fall back to other encodings if necessary."""
+    encodings = ['utf-8', 'utf-16', 'latin-1']
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', encoding=encoding) as file:
+                return file.read()
+        except UnicodeDecodeError:
+            continue
+    raise UnicodeDecodeError(f"Unable to decode file {file_path} with any of the supported encodings: {encodings}")
+
 def concat_files(filenames, output_base, max_tokens, keep_comments, line_numbers, show_full_path, show_path, encoding):
     """Concatenate content from given filenames and handle comments."""
     concatenated_content = ""
@@ -115,45 +130,45 @@ def concat_files(filenames, output_base, max_tokens, keep_comments, line_numbers
     for filename, original_filename in filenames:
         code_file = filename.endswith(tuple(CODE_FILES))
         try:
-            with open(filename, 'r', encoding='utf-8') as file:
-                content = file.read()
-                if not content.strip():
-                    print(f"       | {filename}")
-                    continue
+            # Use the fallback encoding function to read the file
+            content = read_file_with_fallback_encoding(filename)
+            if not content.strip():
+                print(f"       | {filename}")
+                continue
 
-                # Full extension for proper processing
-                extension = filename
+            # Full extension for proper processing
+            extension = filename
 
-                # Debugging: Output the filename being processed
-                if args.debug:
-                    print(f"Debug: Processing file '{filename}'")
+            # Debugging: Output the filename being processed
+            if args.debug:
+                print(f"Debug: Processing file '{filename}'")
 
-                content = prefix_with_line_numbers(content, line_numbers)
-                content = remove_comments(content, extension, keep_comments)
-                content = remove_non_crucial_lines(content, extension, args.concise)
-                content = clean_content(content)
+            content = prefix_with_line_numbers(content, line_numbers)
+            content = remove_comments(content, extension, keep_comments)
+            content = remove_non_crucial_lines(content, extension, args.concise)
+            content = clean_content(content)
 
-                file_tokens = count_tokens(content, encoding)
-                space_padding = 6 - len(str(file_tokens))
-                print(f"{' ' * space_padding}{file_tokens} | {filename}")
+            file_tokens = count_tokens(content, encoding)
+            space_padding = 6 - len(str(file_tokens))
+            print(f"{' ' * space_padding}{file_tokens} | {filename}")
 
-                current_tokens += file_tokens
-                separator = "\n\n\n" if concatenated_content else ""
-                displayed_filename = original_filename if show_path else filename if show_full_path else os.path.basename(filename)
-                concatenated_content += f"{separator}{displayed_filename}:\n"
-                concatenated_content += "```\n" if code_file else "\"\n"
-                concatenated_content += f"{content}\n"
-                concatenated_content += "```\n" if code_file else "\"\n"
+            current_tokens += file_tokens
+            separator = "\n\n\n" if concatenated_content else ""
+            displayed_filename = original_filename if show_path else filename if show_full_path else os.path.basename(filename)
+            concatenated_content += f"{separator}{displayed_filename}:\n"
+            concatenated_content += "```\n" if code_file else "\"\n"
+            concatenated_content += f"{content}\n"
+            concatenated_content += "```\n" if code_file else "\"\n"
 
-                if max_tokens and current_tokens > max_tokens:
-                    output_path = f"{output_base}_part{current_part}.txt"
-                    with open(output_path, 'w', encoding='utf-8') as output_file:
-                        output_file.write(concatenated_content)
+            if max_tokens and current_tokens > max_tokens:
+                output_path = f"{output_base}_part{current_part}.txt"
+                with open(output_path, 'w', encoding='utf-8') as output_file:
+                    output_file.write(concatenated_content)
 
-                    print(f"{output_path} contains {current_tokens} tokens.")
-                    current_part += 1
-                    concatenated_content = ""
-                    current_tokens = 0
+                print(f"{output_path} contains {current_tokens} tokens.")
+                current_part += 1
+                concatenated_content = ""
+                current_tokens = 0
 
         except Exception as e:
             print(f"Error processing file {filename}: {e}")
@@ -170,35 +185,39 @@ def concat_files(filenames, output_base, max_tokens, keep_comments, line_numbers
         return output_filename
 
 def gather_files_from_input(input_path, debug):
-    """Gather files from input, taking into account the TARGET prefix."""
-    source_files = []
-    target_prefix = None
+    """Gather files from input, handling multiple TARGET prefixes."""
+    source_files = []  # List to store tuples of (full_path, original_path)
+    current_target = None  # Variable to store the current TARGET prefix
 
-    # If input is a directory, gather files directly
+    # If the input is a directory, gather all files directly
     if os.path.isdir(input_path):
-        return [(f, f) for f in gather_files(input_path)], target_prefix
+        return [(f, f) for f in gather_files(input_path)], None
 
-    # If input is a file list, process the file
+    # If the input is a file, process it line by line
     if os.path.isfile(input_path):
         with open(input_path, 'r', encoding='utf-8') as f:
-            lines = [line.strip() for line in f if line.strip()]
+            for line in f:
+                line = line.strip()  # Remove leading/trailing whitespace
+                if not line:  # Skip empty lines
+                    continue
 
-        # Check if the first line is a TARGET prefix
-        if lines[0].startswith("TARGET:"):
-            target_prefix = lines[0].replace("TARGET:", "").strip()
-            lines = lines[1:]  # Skip the TARGET line
+                # Check if the line starts with "TARGET:"
+                if line.startswith("TARGET:"):
+                    # Update the current_target to the new TARGET prefix
+                    current_target = line.replace("TARGET:", "").strip()
+                    if debug:
+                        print(f"Debug: New target prefix set to '{current_target}'")
 
-        for path in lines:
-            if not path.startswith("#"):  # Ignore commented-out lines
-                original_path = path  # Store original non-prefixed path
-                if target_prefix:
-                    path = os.path.join(target_prefix, path.lstrip("/"))
-                source_files.append((path, original_path))
+                # If the line is not a comment (starts with "#"), process it as a file path
+                elif not line.startswith("#"):
+                    original_path = line  # Store the original non-prefixed path
+                    # Construct the full path by joining the current_target with the file path
+                    full_path = os.path.join(current_target, line.lstrip("/")) if current_target else line
+                    # Add the (full_path, original_path) tuple to the source_files list
+                    source_files.append((full_path, original_path))
 
-        if debug:
-            print(f"Debug: Target prefix is '{target_prefix}'")
-
-    return source_files, target_prefix
+    # Return the list of files and the last TARGET prefix (for debugging purposes)
+    return source_files, current_target
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process and concatenate files from given paths or directories.')
