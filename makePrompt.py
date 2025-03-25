@@ -4,7 +4,30 @@ import argparse
 import tiktoken
 
 # Constants
-CODE_FILES = ['.php', '.json', '.env', '.blade.php', '.js', '.css', '.md', '.html', '.sql', 'cs']
+CODE_FILES = [
+    '.blade.php', '.php',
+    '.css',
+    '.env',
+    '.html',
+    '.js', '.json',
+    '.md',
+    '.sql',
+    '.cs'
+]
+
+# Mapping of file extensions to language names for markdown code blocks
+LANGUAGE_MAP = {
+    '.blade.php': 'php',
+    '.php': 'php',
+    '.css': 'css',
+    '.env': 'plaintext',
+    '.html': 'html',
+    '.js': 'javascript',
+    '.json': 'json',
+    '.md': 'markdown',
+    '.sql': 'sql',
+    '.cs': 'csharp',
+}
 
 # Utility Functions
 def gather_files(directory_path):
@@ -103,9 +126,9 @@ def remove_comments(content, extension, keep_comments):
     return content
 
 def clean_content(content):
-    """Clean content by removing trailing spaces and empty lines."""
+    """Clean content by removing trailing spaces."""
     lines = content.splitlines()
-    trimmed_lines = [line.rstrip() for line in lines if line.strip()]
+    trimmed_lines = [line.rstrip() for line in lines]
     return "\n".join(trimmed_lines)
 
 def read_file_with_fallback_encoding(file_path):
@@ -136,16 +159,19 @@ def concat_files(filenames, output_base, max_tokens, keep_comments, line_numbers
                 print(f"       | {filename}")
                 continue
 
-            # Full extension for proper processing
-            extension = filename
+            # Extract the file extension
+            extension = os.path.splitext(filename)[1]  # Keeps the leading dot, e.g., ".cs"
+
+            # Check if the extension is in the LANGUAGE_MAP, otherwise default to "plaintext"
+            language = LANGUAGE_MAP.get(extension, "plaintext")
 
             # Debugging: Output the filename being processed
             if args.debug:
                 print(f"Debug: Processing file '{filename}'")
 
             content = prefix_with_line_numbers(content, line_numbers)
-            content = remove_comments(content, extension, keep_comments)
-            content = remove_non_crucial_lines(content, extension, args.concise)
+            content = remove_comments(content, filename, keep_comments)
+            content = remove_non_crucial_lines(content, filename, args.concise)
             content = clean_content(content)
 
             file_tokens = count_tokens(content, encoding)
@@ -153,16 +179,16 @@ def concat_files(filenames, output_base, max_tokens, keep_comments, line_numbers
             print(f"{' ' * space_padding}{file_tokens} | {filename}")
 
             current_tokens += file_tokens
-            separator = "\n\n\n" if concatenated_content else ""
+            separator = "\n\n\n--------------------------------------------------\n\n\n\n" if concatenated_content else ""
             displayed_filename = original_filename if show_path else filename if show_full_path else os.path.basename(filename)
             concatenated_content += f"{separator}{displayed_filename}:\n"
-            concatenated_content += "```\n" if code_file else "\"\n"
-            concatenated_content += f"{content}\n"
+            concatenated_content += f"```{language}\n" if code_file else "\"\n"
+            concatenated_content += f"{content.lstrip("\ufeff")}\n"
             concatenated_content += "```\n" if code_file else "\"\n"
 
             if max_tokens and current_tokens > max_tokens:
-                output_path = f"{output_base}_part{current_part}.txt"
-                with open(output_path, 'w', encoding='utf-8') as output_file:
+                output_path = f"{output_base}_part{current_part}.md"
+                with open(output_path, 'w', encoding='utf-8-sig') as output_file:
                     output_file.write(concatenated_content)
 
                 print(f"{output_path} contains {current_tokens} tokens.")
@@ -174,7 +200,7 @@ def concat_files(filenames, output_base, max_tokens, keep_comments, line_numbers
             print(f"Error processing file {filename}: {e}")
 
     if concatenated_content:
-        output_filename = f"{output_base}_part{current_part}.txt" if current_part > 1 else f"{output_base}.txt"
+        output_filename = f"{output_base}_part{current_part}.md" if current_part > 1 else f"{output_base}.md"
         with open(output_filename, 'w', encoding='utf-8') as output_file:
             output_file.write(concatenated_content)
 
@@ -222,7 +248,7 @@ def gather_files_from_input(input_path, debug):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process and concatenate files from given paths or directories.')
     parser.add_argument('input_path', type=str, help='Directory path or file containing list of paths to search for files.')
-    parser.add_argument('-o', '--output', required=False, type=str, default="prompt", help='Output file prefix. Defaults to "prompt.txt" if not specified.')
+    parser.add_argument('-o', '--output', required=False, type=str, default="prompt", help='Output file prefix. Defaults to "prompt.md" if not specified.')
     parser.add_argument('--line-numbers', action='store_true', help='Prefix lines with their line numbers.')
     parser.add_argument('--keep-comments', action='store_true', help='Retain comments in files.')
     parser.add_argument('--show-full-path', action='store_true', help='Display the full path of files.')
