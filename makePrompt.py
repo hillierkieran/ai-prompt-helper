@@ -9,7 +9,7 @@ CODE_FILES = [
     '.css',
     '.env',
     '.html',
-    '.js', '.json',
+    '.js', '.svelte', '.json',
     '.md',
     '.sql',
     '.cs'
@@ -23,6 +23,7 @@ LANGUAGE_MAP = {
     '.env': 'plaintext',
     '.html': 'html',
     '.js': 'javascript',
+    '.svelte': 'javascript',
     '.json': 'json',
     '.md': 'markdown',
     '.sql': 'sql',
@@ -182,9 +183,9 @@ def concat_files(filenames, output_base, max_tokens, keep_comments, line_numbers
             separator = "\n\n\n--------------------------------------------------\n\n\n\n" if concatenated_content else ""
             displayed_filename = original_filename if show_path else filename if show_full_path else os.path.basename(filename)
             concatenated_content += f"{separator}{displayed_filename}:\n"
-            concatenated_content += f"```{language}\n" if code_file else "\"\n"
+            concatenated_content += f"```{language}\n" if code_file else "\"\"\"\n"
             concatenated_content += f"{content.lstrip("\ufeff")}\n"
-            concatenated_content += "```\n" if code_file else "\"\n"
+            concatenated_content += "```\n" if code_file else "\"\"\"\n"
 
             if max_tokens and current_tokens > max_tokens:
                 output_path = f"{output_base}_part{current_part}.md"

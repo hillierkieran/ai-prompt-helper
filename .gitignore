@@ -1,6 +1,7 @@
 *.txt
 *.md
 input/
+tmp/
 .history/
 *.diff
 tmp.*
