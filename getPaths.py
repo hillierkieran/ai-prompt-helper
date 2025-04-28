@@ -17,7 +17,7 @@ def list_all_files_in_directory(directory, file_types=None, gitignore_spec=None)
 
         for file in files:
             # Get relative file path and normalize to forward slashes
-            file_path = os.path.relpath(os.path.join(root, file), directory).replace('\\', '/')
+            file_path = os.path.relpath(os.path.join(root, file), directory)#.replace('\\', '/')
 
             # Check if the file is ignored by .gitignore
             if gitignore_spec and gitignore_spec.match_file(file_path):

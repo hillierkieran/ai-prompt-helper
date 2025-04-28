@@ -5,4 +5,6 @@ tmp/
 .history/
 *.diff
 tmp.*
+trees/
+*.tree
 .vs/

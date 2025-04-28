@@ -42,7 +42,7 @@ def generate_directory_tree(directory_path, indent="", spec=None, include_all=Fa
         # If the item is a directory...
         if os.path.isdir(item_path):
             # Add it to the tree with appropriate indentation
-            tree += f"{indent}{'└── ' if is_last else '├── '}{item}/\n"
+            tree += f"{indent}{'└── ' if is_last else '├── '}{item}\\\n"
             # Recursively generate the tree structure for the subdirectory
             tree += generate_directory_tree(item_path, indent + ("    " if is_last else "│   "), spec, include_all)
         # Else, if the item is a file...
@@ -93,7 +93,7 @@ if __name__ == "__main__":
     spec = load_gitignore(input_directory)
 
     # Generate directory tree
-    directory_tree = f"{input_directory}/\n{generate_directory_tree(input_directory, spec=spec, include_all=include_all)}"
+    directory_tree = f"{input_directory}\n{generate_directory_tree(input_directory, spec=spec, include_all=include_all)}"
 
     # Write the generated directory tree to the output file with UTF-8 encoding
     with open(output_file, "w", encoding="utf-8") as file:
