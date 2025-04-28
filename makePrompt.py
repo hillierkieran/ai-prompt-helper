@@ -9,10 +9,14 @@ CODE_FILES = [
     '.css',
     '.env',
     '.html',
-    '.js', '.svelte', '.json',
+    '.js', '.svelte',
+    '.json',
     '.md',
     '.sql',
-    '.cs'
+    '.cs',
+    '.diff',
+    '.csv',
+    '.tree',
 ]
 
 # Mapping of file extensions to language names for markdown code blocks
@@ -28,6 +32,8 @@ LANGUAGE_MAP = {
     '.md': 'markdown',
     '.sql': 'sql',
     '.cs': 'csharp',
+    '.diff': 'diff',
+    '.csv': '',
 }
 
 # Utility Functions
@@ -63,9 +69,11 @@ def remove_non_crucial_lines(content, extension, concise):
     import_startswith = {
         '.php': 'use ',
         '.js': 'import ',
+        '.svelte': 'import ',
         '.css': '@import ',
         '.sql': 'USE ',
         '.sql': 'using ',
+        '.cs': 'using ',
     }
 
     if extension in import_startswith:
@@ -99,11 +107,13 @@ def remove_comments(content, extension, keep_comments):
 
     comment_rules = {
         # '.file_extension': ('single_line_comment', 'multi_line_comment_start', 'multi_line_comment_end')
+        '.blade.php': ('{{--', '--}}', '<!--', '-->'),
         '.php': ('//', '/*', '*/'),
         '.js': ('//', '/*', '*/'),
+        '.svelte': ('//', '/*', '*/'),
+        '.json': ('//', '/*', '*/'),
         '.css': (None, '/*', '*/'),
         '.html': (None, '<!--', '-->'),
-        '.blade.php': ('{{--', '--}}', '<!--', '-->'),
         '.env': ('#', None, None),
         '.sql': ('--', '/*', '*/'),
         '.cs': ('//', '/*', '*/'),
@@ -117,11 +127,19 @@ def remove_comments(content, extension, keep_comments):
             content = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
         else:
             single, multi_start, multi_end = comment_rules[full_extension]
+
             # Remove multiline comments
             if multi_start and multi_end:
+                # Remove lines that only contain a multiline comment
+                content = re.sub(r'^[ \t]*' + re.escape(multi_start) + r'.*?' + re.escape(multi_end) + r'[ \t]*$\n?', '', content, flags=re.MULTILINE | re.DOTALL)
+                # Remove in-line multiline comments
                 content = re.sub(re.escape(multi_start) + r'.*?' + re.escape(multi_end), '', content, flags=re.DOTALL)
-            # Remove single-line comments if defined
+
+            # Remove full-line single comments
             if single:
+                # Remove lines that only contain a single-line comment
+                content = re.sub(r'^[ \t]*' + re.escape(single) + r'.*[ \t]*$\n?', '', content, flags=re.MULTILINE)
+                # Remove in-line single-line comments
                 content = re.sub(re.escape(single) + r'.*$', '', content, flags=re.MULTILINE)
 
     return content
@@ -180,7 +198,7 @@ def concat_files(filenames, output_base, max_tokens, keep_comments, line_numbers
             print(f"{' ' * space_padding}{file_tokens} | {filename}")
 
             current_tokens += file_tokens
-            separator = "\n\n\n--------------------------------------------------\n\n\n\n" if concatenated_content else ""
+            separator = "\n\n\n--------------------------------------------------------------------------------\n\n\n\n" if concatenated_content else ""
             displayed_filename = original_filename if show_path else filename if show_full_path else os.path.basename(filename)
             concatenated_content += f"{separator}{displayed_filename}:\n"
             concatenated_content += f"```{language}\n" if code_file else "\"\"\"\n"
