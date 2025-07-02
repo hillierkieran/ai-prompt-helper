@@ -24,7 +24,6 @@ LANGUAGE_MAP = {
     '.blade.php': 'php',
     '.php': 'php',
     '.css': 'css',
-    '.env': 'plaintext',
     '.html': 'html',
     '.js': 'javascript',
     '.svelte': 'javascript',
@@ -181,8 +180,8 @@ def concat_files(filenames, output_base, max_tokens, keep_comments, line_numbers
             # Extract the file extension
             extension = os.path.splitext(filename)[1]  # Keeps the leading dot, e.g., ".cs"
 
-            # Check if the extension is in the LANGUAGE_MAP, otherwise default to "plaintext"
-            language = LANGUAGE_MAP.get(extension, "plaintext")
+            # Check if the extension is in the LANGUAGE_MAP
+            language = LANGUAGE_MAP.get(extension, "")
 
             # Debugging: Output the filename being processed
             if args.debug:
@@ -198,7 +197,9 @@ def concat_files(filenames, output_base, max_tokens, keep_comments, line_numbers
             print(f"{' ' * space_padding}{file_tokens} | {filename}")
 
             current_tokens += file_tokens
-            separator = "\n\n\n--------------------------------------------------------------------------------\n\n\n\n" if concatenated_content else ""
+            large_space = "\n\n\n"
+
+            separator = "\n\n\n" + ("≡" * 80) + "\n\n\n\n" if concatenated_content else ""
             displayed_filename = original_filename if show_path else filename if show_full_path else os.path.basename(filename)
             concatenated_content += f"{separator}{displayed_filename}:\n"
             concatenated_content += f"```{language}\n" if code_file else "\"\"\"\n"
