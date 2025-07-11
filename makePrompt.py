@@ -17,6 +17,7 @@ CODE_FILES = [
     '.diff',
     '.csv',
     '.tree',
+    '.xml',
 ]
 
 # Mapping of file extensions to language names for markdown code blocks
@@ -33,6 +34,7 @@ LANGUAGE_MAP = {
     '.cs': 'csharp',
     '.diff': 'diff',
     '.csv': '',
+    '.xml': 'xml',
 }
 
 # Utility Functions
@@ -116,6 +118,7 @@ def remove_comments(content, extension, keep_comments):
         '.env': ('#', None, None),
         '.sql': ('--', '/*', '*/'),
         '.cs': ('//', '/*', '*/'),
+        '.xml': (None, '<!--', '-->'),
     }
 
     if full_extension in comment_rules:

@@ -1,7 +1,7 @@
 *.txt
 *.md
 input/
-tmp/
+tmp*/
 .history/
 *.diff
 tmp.*

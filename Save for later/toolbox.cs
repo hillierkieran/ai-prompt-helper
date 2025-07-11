@@ -275,6 +275,203 @@ internal static partial class Toolbox
         return parameters == null ? sql : $"{DynamicParametersToSql(parameters)}{sql}";
     }
 
+    public static string GetSqlExceptionString(SqlException ex, CommandDefinition command)
+    {
+        string sql = GetSqlString(command);
+        return GetSqlExceptionString(ex, sql);
+    }
+
+    public static string GetSqlExceptionString(SqlException ex, string? sql = null)
+    {
+        StringBuilder errorStr = new();
+        List<int> errorLines = [];
+
+        string newLine = Environment.NewLine;
+        string twoNewLines = Environment.NewLine + Environment.NewLine;
+
+        errorStr.Append("SQL Exception details:");
+
+        if (ex.Errors.Count == 0)
+        {
+            errorStr.Append(twoNewLines + "  No additional information.");
+        }
+        else
+        {
+            for (int i = 0; i < ex.Errors.Count; i++)
+            {
+                errorStr.Append(twoNewLines + "  SQL Error #" + (i + 1) + " of " + ex.Errors.Count + newLine +
+                    "  Message: " + ex.Errors[i].Message + newLine +
+                    "  Error Number: " + ex.Errors[i].Number + newLine +
+                    "  Line Number: " + ex.Errors[i].LineNumber + newLine +
+                    "  Source: " + ex.Errors[i].Source + newLine +
+                    "  Procedure: " + ex.Errors[i].Procedure);
+                errorLines.Add(ex.Errors[i].LineNumber);
+            }
+        }
+
+
+        if (ex.Number is (-2146893019) or 18456 or 53)
+        {
+            return errorStr.ToString();
+        }
+
+        if (!string.IsNullOrWhiteSpace(sql))
+        {
+            errorStr.Append(twoNewLines + "SQL Query:");
+            errorStr.Append(twoNewLines + Indent(AddLineNumbers(sql, errorLines)));
+        }
+
+        return errorStr.ToString();
+    }
+
+    public static string AddLineNumbers(string input, List<int>? errorLines = null)
+    {
+        if (string.IsNullOrEmpty(input))
+            return string.Empty;
+
+        string[] lines = input.Split(Environment.NewLine);
+        int lineCount = lines.Length;
+        int numberWidth = lineCount.ToString().Length;
+
+        // Use a HashSet for efficient lookup if errorLines is provided
+        HashSet<int>? errorLineSet = errorLines is not null ? new(errorLines) : null;
+
+        StringBuilder result = new();
+        for (int i = 0; i < lineCount; i++)
+        {
+            // Add '>' if this is one of the error lines (1-based index)
+            string marker = (errorLineSet is not null && errorLineSet.Contains(i + 1)) ? "> " : "  ";
+            result.Append($"{marker}{(i + 1).ToString().PadLeft(numberWidth)}| {lines[i]}{Environment.NewLine}");
+        }
+
+        return result.ToString().TrimEnd();
+    }
+
+    public static string Indent(string input, int indentWidth = 2)
+    {
+        if (string.IsNullOrEmpty(input))
+            return string.Empty;
+
+        string indent = new(' ', indentWidth);
+        string[] lines = input.Split(Environment.NewLine);
+
+        StringBuilder result = new();
+        foreach (string line in lines)
+        {
+            result.Append($"{indent}{line}{Environment.NewLine}");
+        }
+        return result.ToString().TrimEnd();
+    }
+
+    // eg.
+    // ("A2", "A1") => "A2
+    // ("A2", "A1:C1") => "A2:C2"
+    // ("A2", "A1:C1" data(.Rows.Count = 3)(.Columns.Count = 2) => "A2:B4"
+    public static string GetCellRange(string startCell, string filterRange, DataTable? data = null)
+    {
+        if (string.IsNullOrEmpty(startCell) || string.IsNullOrEmpty(filterRange))
+            return string.Empty;
+
+        string[] filterParts = filterRange.Split(':');
+
+        ExcelCellAddress start = new(startCell);
+        ExcelCellAddress filterStart = new(filterParts[0]);
+        ExcelCellAddress? filterEnd = filterParts.Length == 2 ? new(filterParts[1]) : null;
+        ExcelCellAddress? end = null;
+
+        // Calculate the end cell based on the filter range
+        if (filterEnd is not null)
+        {
+            int endRow = filterEnd.Row - filterStart.Row + start.Row;
+            int endColumn = filterEnd.Column - filterStart.Column + start.Column;
+
+            // Adjust end cell if data is provided
+            if (data is not null && data.Rows.Count > 0)
+            {
+                endRow = start.Row + data.Rows.Count - 1;
+                endColumn = start.Column + data.Columns.Count - 1;
+            }
+
+            end = new($"{ExcelCellAddress.GetColumnLetter(endColumn)}{endRow}");
+        }
+
+        return $"{start.Address}{(end is not null ? $":{end.Address}" : "")}";
+    }
+
+    public static string DataTableToPrettyString(DataTable table)
+    {
+        if (table == null)
+            return "";
+
+        StringBuilder result = new();
+
+        // Calculate max column widths (including headers)
+        int colCount = table.Columns.Count;
+        int[] colWidths = new int[colCount];
+
+        // Set initial widths based on column names
+        for (int i = 0; i < colCount; i++)
+            colWidths[i] = table.Columns[i].ColumnName.Length;
+
+        // Check all rows to determine max content widths
+        foreach (DataRow row in table.Rows)
+        {
+            for (int i = 0; i < colCount; i++)
+            {
+                string? text = row.IsNull(i) ? "null" : row[i].ToString();
+                colWidths[i] = Math.Max(colWidths[i], text?.Length ?? 0);
+            }
+        }
+
+        // Append headers
+        for (int i = 0; i < colCount; i++)
+            result.Append(table.Columns[i].ColumnName.PadRight(colWidths[i] + 2));
+        result.AppendLine();
+
+        // Append separator line
+        for (int i = 0; i < colCount; i++)
+            result.Append(new string('-', colWidths[i]) + "  ");
+        result.AppendLine();
+
+        // Append rows
+        foreach (DataRow row in table.Rows)
+        {
+            for (int i = 0; i < colCount; i++)
+            {
+                string? text = row.IsNull(i) ? "null" : row[i].ToString();
+                result.Append((text ?? "null").PadRight(colWidths[i] + 2));
+            }
+            result.AppendLine();
+        }
+
+        return result.ToString();
+    }
+
+    public static string GetExcelSheetDetails(ExcelPackage package)
+    {
+        if (package == null)
+            return "";
+
+        // Get the workbook
+        ExcelWorkbook workbook = package.Workbook;
+
+        StringBuilder result = new();
+
+        // Iterate through all worksheets
+        foreach (ExcelWorksheet? worksheet in workbook.Worksheets)
+        {
+            // Get the sheet name (tab name)
+            string sheetName = worksheet.Name;
+
+            // Get the internal ID (SheetID)
+            int sheetId = worksheet.Index;
+
+            result.AppendLine($"{sheetId.ToString().PadLeft(2)} - '{sheetName}'");
+        }
+
+        return result.ToString();
+    }
+
     public static string GenerateShortId(int length = LookupRepository.ShortIdLength)
     {
         const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
